@@ -1,0 +1,113 @@
+<!doctype html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <title>NL2SQL Test Portal</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            margin: 2rem;
+        }
+
+        label {
+            display: block;
+            margin: .5rem 0 .25rem;
+        }
+
+        textarea,
+        input,
+        select {
+            width: 100%;
+            padding: .5rem;
+        }
+
+        button {
+            margin-top: 1rem;
+            padding: .6rem 1rem;
+        }
+
+        pre {
+            background: #111;
+            color: #eee;
+            padding: 1rem;
+            overflow: auto;
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+
+        table {
+            border-collapse: collapse;
+            width: 100%;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: .4rem;
+            text-align: left;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>NL2SQL Test Portal</h1>
+    <label>Question</label>
+    <input id="question" placeholder="List last 5 missions by launch date" />
+    <label>Backend</label>
+    <select id="backend">
+        <option value="mock" selected>mock</option>
+        <option value="ollama">ollama (local)</option>
+        <option value="openai">openai (api)</option>
+    </select>
+    <button onclick="run()">Run</button>
+
+    <div id="out"></div>
+
+    <script>
+        async function run() {
+            const question = document.getElementById('question').value || 'List last 5 missions by launch date';
+            const backend = document.getElementById('backend').value;
+            const out = document.getElementById('out');
+            out.innerHTML = 'Running...';
+            const r = await fetch('/api/run', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question, backend })
+            });
+            const data = await r.json();
+            const rowsTable = rowsToTable(data.rows || []);
+            out.innerHTML = `
+    <h2>SQL</h2>
+    <pre>${data.sql || ''}</pre>
+    <div class="row">
+      <div>
+        <h2>Rows (${(data.rows || []).length})</h2>
+        ${rowsTable}
+      </div>
+      <div>
+        <h2>Answer</h2>
+        <pre>${data.answer || ''}</pre>
+        <h3>Warnings</h3>
+        <pre>${(data.warnings || []).join('\\n')}</pre>
+      </div>
+    </div>
+  `;
+        }
+
+        function rowsToTable(rows) {
+            if (!rows.length) return '<em>No rows</em>';
+            const keys = Object.keys(rows[0]);
+            const head = '<tr>' + keys.map(k => `<th>${k}</th>`).join('') + '</tr>';
+            const body = rows.map(r => '<tr>' + keys.map(k => `<td>${r[k]}</td>`).join('') + '</tr>').join('');
+            return `<table>${head}${body}</table>`;
+        }
+    </script>
+</body>
+
+</html>
