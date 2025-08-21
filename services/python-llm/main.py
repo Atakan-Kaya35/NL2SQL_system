@@ -5,8 +5,9 @@ from pydantic import BaseModel, Field
 from sqlglot import parse_one, exp
 import json
 
-def build_adapter(name: Optional[str]):
-    name = (name or os.getenv("LLM_BACKEND", "mock")).lower()
+# we will choose adapter per-request using build_adapter()
+def build_adapter():
+    name = os.getenv("LLM_BACKEND", "mock").lower()
     if name == "ollama":
         from adapters.ollama import OllamaAdapter
         return OllamaAdapter()
@@ -33,41 +34,31 @@ class DraftAnswerRequest(BaseModel):
     question: str
     sql: str
     rows: List[Dict]
-    backend: Optional[str] = None
 
 class DraftAnswerResponse(BaseModel):
     answer: str
 
 def _has_node(tree, candidate):
-    """
-    True if the parsed tree contains any node of the 'candidate' expression class.
-    If the class doesn't exist in this sqlglot build, returns False.
-    """
     if candidate is None:
         return False
     return any(isinstance(node, candidate) for node in tree.walk())
 
 def validate_safe_select(sql: str) -> list[str]:
-    """
-    Guardrail: only allow read-only queries.
-    Return a list of warnings (empty means OK). Raise ValueError for hard blocks.
-    """
     try:
-        tree = parse_one(sql, read=None)  # let sqlglot detect dialect
+        tree = parse_one(sql, read=None)
     except Exception as e:
         raise ValueError(f"Could not parse SQL: {e}")
 
-    # Try to resolve classes that may or may not exist in this sqlglot version
     Insert     = getattr(exp, "Insert", None)
     Update     = getattr(exp, "Update", None)
     Delete     = getattr(exp, "Delete", None)
     Drop       = getattr(exp, "Drop", None)
-    Alter      = getattr(exp, "Alter", None)        # might be None
-    AlterTable = getattr(exp, "AlterTable", None)   # some versions use this
+    Alter      = getattr(exp, "Alter", None)
+    AlterTable = getattr(exp, "AlterTable", None)
     Truncate   = getattr(exp, "Truncate", None)
     Create     = getattr(exp, "Create", None)
-    Execute    = getattr(exp, "Execute", None)      # e.g., CALL/EXECUTE in some dialects
-    Transaction= getattr(exp, "Transaction", None)  # BEGIN/COMMIT/ROLLBACK
+    Execute    = getattr(exp, "Execute", None)
+    Transaction= getattr(exp, "Transaction", None)
     InsertOverwrite = getattr(exp, "InsertOverwrite", None)
 
     hard_block = any([
@@ -83,23 +74,19 @@ def validate_safe_select(sql: str) -> list[str]:
         _has_node(tree, Execute),
         _has_node(tree, Transaction),
     ])
-
     if hard_block:
         raise ValueError("Only SELECT queries are allowed by the guardrail.")
 
-    # Optional: warn if multiple SELECTs / CTE with writes (defensive)
     warnings = []
     if not any(isinstance(node, exp.Select) for node in tree.find_all(exp.Select)):
         warnings.append("No SELECT found; query may not return rows.")
-
     return warnings
 
 @app.post("/v1/generate-sql", response_model=GenerateSQLResponse)
 async def generate_sql(req: GenerateSQLRequest):
     """
-    Place where the prompt for the LLM to create the SQL query is created and submitted.
+    Prompt the LLM to create a single, safe PostgreSQL SELECT query.
     """
-    adapter = build_adapter(req.backend)
     prompt = f"""You are an expert data analyst producing a single, safe PostgreSQL SELECT query.
 - Only output a single SQL statement; no explanations.
 - Use existing columns; do not invent.
@@ -112,30 +99,30 @@ Schema (may be partial):
 Context (optional):
 {req.context or '(none)'}
 """
-    text = await adapter.generate(prompt)
-    sql = text.strip().strip('`')
-    # If adapters return "SQL: ..." normalize
+    adapter = build_adapter()
+    sql_text = await adapter.generate(prompt, schema_hint=req.schema_ddl)
+
+    sql = sql_text.strip().strip('`')
     if sql.lower().startswith("sql"):
         sql = sql.split(":", 1)[-1].strip()
+
     try:
         warnings = validate_safe_select(sql)
     except ValueError as e:
-        # Client error: the request led to a disallowed query
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
-        # Unexpected server error
         raise HTTPException(status_code=500, detail=f"Validation failed: {e}")
 
     return GenerateSQLResponse(sql=sql, warnings=warnings)
 
 @app.post("/v1/draft-answer", response_model=DraftAnswerResponse)
 async def draft_answer(req: DraftAnswerRequest):
-    backend_name = (req.backend or os.getenv("LLM_BACKEND", "mock")).lower()
+    backend_name = os.getenv("LLM_BACKEND", "mock").lower()
     if backend_name == "mock":
         count = len(req.rows)
         sample = req.rows[0] if count > 0 else {}
         return DraftAnswerResponse(answer=f"Found {count} rows. Example: {sample}")
-    # real LLM summarize
+
     adapter = build_adapter(backend_name)
     prompt = (
         "You are a data assistant. Given a natural language question, the SQL used, and the result rows (JSON), "

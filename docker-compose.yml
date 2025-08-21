@@ -25,10 +25,12 @@ services:
     container_name: nl2sql_python_llm
     environment:
       # select mock for offline testing
-      LLM_BACKEND: ${LLM_BACKEND:-mock}
+      LLM_BACKEND: "openai"
+      LLM_PROVIDER: "openai"
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
-      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-unset}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1/chat/completions}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-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}
+      OPENAI_MODEL: "gpt-4o-mini"
     depends_on:
       - postgres
     ports:
