@@ -10,3 +10,5 @@ pgdata/           # your DB volume folder if it maps to local
 
 # OS
 .DS_Store
+
+ollama_data/

@@ -18,6 +18,55 @@ services:
       retries: 30
     networks: [nl2sql_net]
 
+  nl2sql_ollama:
+    image: ollama/ollama:latest
+    container_name: nl2sql_ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      OLLAMA_NO_MMAP: "1"        # force buffered I/O (no memory-mapping)
+      OLLAMA_LOAD_TIMEOUT: "30m" # give the first cold load time to finish
+      OLLAMA_KEEP_ALIVE: "24h"   # keep the model warm
+      OLLAMA_NUM_PARALLEL: "1"   # one request at a time while debugging
+      OLLAMA_HOST: "0.0.0.0:11434"
+      NVIDIA_VISIBLE_DEVICES: "all"
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M}"
+    volumes:
+      - ./ollama_data:/root/.ollama
+    ports:
+      - "11434:11434"
+    networks: [nl2sql_net]
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  warmup:
+    image: curlimages/curl:8.8.0
+    container_name: nl2sql_warmup
+    depends_on:
+      nl2sql_ollama:
+        condition: service_started
+    environment:
+      OLLAMA_MODEL: "llama3.1:8b-instruct-q4_K_M"
+    networks: [nl2sql_net]
+    restart: "no"
+    command: >
+      sh -lc '
+        # wait until daemon answers
+        until curl -sf http://nl2sql_ollama:11434/api/tags >/dev/null; do sleep 1; done;
+        echo "Warming up ${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M} ...";
+        curl -sS -X POST http://nl2sql_ollama:11434/api/chat \
+          -H "Content-Type: application/json" \
+          -d "{\"model\":\"${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M}\",\"messages\":[{\"role\":\"user\",\"content\":\"warmup\"}],\"stream\":false}";
+      '
+
   python-llm:
     build:
       context: ./services/python-llm
@@ -25,14 +74,19 @@ services:
     container_name: nl2sql_python_llm
     environment:
       # select mock for offline testing
-      LLM_BACKEND: "openai"
-      LLM_PROVIDER: "openai"
+      LLM_BACKEND: "ollama"
+      LLM_PROVIDER: "ollama"
       OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_BASE_URL: "http://nl2sql_ollama:11434"
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M}"
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1/chat/completions}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-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}
       OPENAI_MODEL: "gpt-4o-mini"
     depends_on:
-      - postgres
+      nl2sql_ollama:
+        condition: service_healthy
+      warmup:
+        condition: service_completed_successfully
     ports:
       - "8000:8000"
     networks: [nl2sql_net]
@@ -56,19 +110,11 @@ services:
     networks: [nl2sql_net]
 
   # Optional: local Ollama for offline LLM hosting. Preload models into the volume before going offline.
-  ollama:
-    image: ollama/ollama:latest
-    container_name: nl2sql_ollama
-    restart: unless-stopped
-    volumes:
-      - ollama:/root/.ollama
-    ports:
-      - "11434:11434"
-    networks: [nl2sql_net]
+
 
 volumes:
   pgdata:
-  ollama:
+  ollama_models:
 
 networks:
   nl2sql_net:
