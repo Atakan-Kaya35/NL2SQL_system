@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+RUN pip install --no-cache-dir spacetrack psycopg2-binary tenacity python-dateutil
+
+WORKDIR /app
+COPY ingest_satcat.py /app/ingest_satcat.py
+COPY run_ingest.sh /app/run_ingest.sh
+RUN chmod +x /app/run_ingest.sh
+
+# Optional: add supercronic for cron-like scheduling
+RUN apt-get update && apt-get install -y ca-certificates curl && rm -rf /var/lib/apt/lists/* \
+    && curl -fsSL https://github.com/aptible/supercronic/releases/download/v0.2.25/supercronic-linux-amd64 -o /usr/local/bin/supercronic \
+    && chmod +x /usr/local/bin/supercronic
+
+# Default: one-shot
+CMD ["/app/run_ingest.sh"]

@@ -1,5 +1,24 @@
 version: "3.9"
 services:
+
+  satcat_ingest:
+    build:
+      context: ./satcat_ingest
+    container_name: nl2sql_satcat_ingest
+    environment:
+      ST_USER: ${ST_USER}
+      ST_PASS: ${ST_PASS}
+      PG_DSN: postgresql://app:app_pw@postgres:5432/appdb
+      RUN_MODE: oneshot          # ← force one-shot
+      # CRON: "10 20 * * * /app/run_once.sh"   # ← remove or comment out
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"                 # ← important: do NOT restart
+    networks: [nl2sql_net]
+    profiles: ["manual"]          # ← optional: keeps it out of normal `up -d`
+
+    
   postgres:
     image: postgres:16
     container_name: nl2sql_postgres
@@ -9,7 +28,7 @@ services:
       POSTGRES_DB: appdb
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./db:/docker-entrypoint-initdb.d:ro
     # Needed so other services wait untill Postgres is
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U app -d appdb"]
