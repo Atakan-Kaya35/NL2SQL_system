@@ -9,7 +9,29 @@ class OllamaAdapter:
         self.base_url = base_url.rstrip("/")
         self.model = model
 
-    async def generate(
+    async def intuition_generate(
+        self,
+        prompt: str,
+        *,
+        temperature: float = 0.7,
+        max_tokens: int = 512,
+    ) -> str:
+        payload = {
+            "model": self.model,
+            "messages": [
+                {"role": "user", "content": prompt},
+            ],
+            "stream": False,
+            "options": {"temperature": temperature, "num_predict": max_tokens},
+        }
+
+        async with httpx.AsyncClient(timeout=600) as client:
+            r = await client.post(f"{self.base_url}/api/chat", json=payload)
+            r.raise_for_status()
+            data = r.json()
+        return (data.get("message") or {}).get("content", "").strip()
+
+    async def sql_generate(
         self,
         prompt: str,
         *,

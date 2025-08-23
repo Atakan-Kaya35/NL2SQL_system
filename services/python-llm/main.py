@@ -25,9 +25,16 @@ class GenerateSQLRequest(BaseModel):
     schema_ddl: Optional[str] = Field(None, description="Optional DDL snippet")
     context: Optional[str] = Field(None, description="Optional extra context (RAG)")
     backend: Optional[str] = Field(None, description="Backend override: mock|ollama|openai")
+    
+class GenerateInferenceRequest(BaseModel):
+    question: str
+    context: str
+
+class GenerateInferenceResponse(BaseModel):
+    answer: str
 
 class GenerateSQLResponse(BaseModel):
-    sql: str
+    response: str
     warnings: List[str] = []
 
 class DraftAnswerRequest(BaseModel):
@@ -61,6 +68,7 @@ def validate_safe_select(sql: str) -> list[str]:
     Transaction= getattr(exp, "Transaction", None)
     InsertOverwrite = getattr(exp, "InsertOverwrite", None)
 
+    # Guardrail: non-SELECT statements are not allowed 
     hard_block = any([
         _has_node(tree, Insert),
         _has_node(tree, InsertOverwrite),
@@ -100,7 +108,7 @@ Context (optional):
 {req.context or '(none)'}
 """
     adapter = build_adapter()
-    sql_text = await adapter.generate(prompt, schema_hint=req.schema_ddl)
+    sql_text = await adapter.sql_generate(prompt, schema_hint=req.schema_ddl)
 
     sql = sql_text.strip().strip('`')
     if sql.lower().startswith("sql"):
@@ -113,7 +121,21 @@ Context (optional):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Validation failed: {e}")
 
-    return GenerateSQLResponse(sql=sql, warnings=warnings)
+    return GenerateSQLResponse(response=sql, warnings=warnings)
+
+@app.post("/v1/generate-intuition", response_model=GenerateInferenceResponse)
+async def generate_intuition(req: GenerateInferenceRequest):
+    """
+    Given a question, context, and SQL results (as JSON), draft a short answer.
+    """
+    prompt = (
+        "You are a data assistant. Given a natural language question and the result rows (JSON), "
+        "write a short, clear answer in one or two sentences.\n\n"
+        f"Question: {req.question}\nContext: {req.context}"
+    )
+    adapter = build_adapter()
+    text = await adapter.sql_generate(prompt)
+    return GenerateInferenceResponse(answer=text.strip())
 
 @app.post("/v1/draft-answer", response_model=DraftAnswerResponse)
 async def draft_answer(req: DraftAnswerRequest):
