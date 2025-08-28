@@ -45,6 +45,20 @@ public class QueryController {
             - source (text) — Data source tag (usually 'space-track').
             - last_seen_utc (timestamptz) — Ingestion timestamp.
 
+            Table: orbital.gp_history  (minimal orbital dataset; 1 row per creation_date)
+            - norad_cat_id       (int, PK, FK→satcat.norad_cat_id) — object key.
+            - epoch              (timestamptz, UTC) — TLE epoch timestamp, the point untill the orbit is relevant.
+            - creation_date      (timestamptz, UTC) — when Space-Track created this element set.
+            - object_name        (text) — common object name.
+            - object_id          (text) — International Designator (COSPAR), e.g., '1958-002B'.
+            - center_name        (text) — central body name (typically 'EARTH').
+            - mean_motion        (double precision, revs/day) — orbital mean motion.
+            - semimajor_axis_km  (double precision, km) — semi-major axis length.
+            - period_min         (double precision, minutes) — orbital period.
+            - tle_line0          (text) — TLE title line (may mirror object name).
+            - tle_line1          (text) — TLE line 1 (raw string).
+            - tle_line2          (text) — TLE line 2 (raw string).
+
             3) Synonyms → Columns (map user language to schema)
             - “NORAD ID”, “catalog number”, “satcat number” → norad_cat_id
             - “COSPAR”, “International Designator”, “INTL DES”, “NSSDC” → object_id

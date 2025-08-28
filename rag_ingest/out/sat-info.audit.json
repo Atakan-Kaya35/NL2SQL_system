@@ -1,0 +1,20 @@
+{
+  "dataset": "sat-info",
+  "ts_utc": "2025-08-26T12:48:47Z",
+  "embedding_model": "nomic-embed-text",
+  "apply": true,
+  "counts": {
+    "desired": 6,
+    "current": 6,
+    "creates": 0,
+    "updates": 1,
+    "deletes": 0
+  },
+  "actions": [
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "info::sat-info::row::5",
+      "chunks": 1
+    }
+  ]
+}

@@ -1,6 +1,5 @@
 version: "3.9"
 services:
-
   satcat_ingest:
     build:
       context: ./satcat_ingest
@@ -18,7 +17,6 @@ services:
     networks: [nl2sql_net]
     profiles: ["manual"]          # ← optional: keeps it out of normal `up -d`
 
-    
   postgres:
     image: postgres:16
     container_name: nl2sql_postgres
@@ -36,6 +34,8 @@ services:
       timeout: 3s
       retries: 30
     networks: [nl2sql_net]
+
+
 
   nl2sql_ollama:
     image: ollama/ollama:latest
@@ -74,6 +74,7 @@ services:
         condition: service_started
     environment:
       OLLAMA_MODEL: "llama3.1:8b-instruct-q4_K_M"
+      EMBED_MODEL: "nomic-embed-text"
     networks: [nl2sql_net]
     restart: "no"
     command: >
@@ -84,6 +85,9 @@ services:
         curl -sS -X POST http://nl2sql_ollama:11434/api/chat \
           -H "Content-Type: application/json" \
           -d "{\"model\":\"${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M}\",\"messages\":[{\"role\":\"user\",\"content\":\"warmup\"}],\"stream\":false}";
+        curl -sS -X POST http://nl2sql_ollama:11434/api/embeddings \
+          -H "Content-Type: application/json" \
+          -d "{\"model\":\"${EMBED_MODEL:-nomic-embed-text}\",\"messages\":[{\"role\":\"user\",\"content\":\"warmup\"}],\"stream\":false}";      
       '
 
   python-llm:
@@ -95,12 +99,15 @@ services:
       # select mock for offline testing
       LLM_BACKEND: "ollama"
       LLM_PROVIDER: "ollama"
-      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_URL: ${OLLAMA_URL:-http://nl2sql_ollama:11434}
       OLLAMA_BASE_URL: "http://nl2sql_ollama:11434"
       OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M}"
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1/chat/completions}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-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}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
       OPENAI_MODEL: "gpt-4o-mini"
+      EMBED_MODEL: "nomic-embed-text"
+      APP_PG_DSN: "dbname=appdb user=app password=app_pw host=nl2sql_postgres port=5432"
+      RAG_PG_DSN: "dbname=ragdb user=rag password=ragpw host=rag-pg port=5432"
     depends_on:
       nl2sql_ollama:
         condition: service_healthy
@@ -109,6 +116,13 @@ services:
     ports:
       - "8000:8000"
     networks: [nl2sql_net]
+    develop:
+      watch:
+        - path: ./services/python-llm
+          action: sync
+          target: /app/
+        - path: ./services/python-llm/requirements.txt
+          action: rebuild
 
   backend:
     build:
@@ -128,12 +142,59 @@ services:
       - "8080:8080"
     networks: [nl2sql_net]
 
-  # Optional: local Ollama for offline LLM hosting. Preload models into the volume before going offline.
+  rag-pg:
+    image: pgvector/pgvector:pg16   # includes pgvector for Postgres 16
+    container_name: rag-pg
+    environment:
+      POSTGRES_USER: rag
+      POSTGRES_PASSWORD: ragpw
+      POSTGRES_DB: postgres   # we'll create ragdb ourselves for deterministic collation
+    volumes:
+      - ragpgdata:/var/lib/postgresql/data
+    networks: [nl2sql_net]
 
+  tle_ingest:
+    build: ./tle_ingest
+    environment:
+      ST_USERNAME: ${ST_USER}
+      ST_PASSWORD: ${ST_PASS}
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: appdb
+      PGUSER: app
+      PGPASSWORD: ${DB_PASSWORD}
+      MODE: once                # "once" for manual runs
+      BATCH_SIZE: 100
+      INTER_BATCH_SLEEP: 12.0
+    depends_on:
+      - postgres
+    networks:
+      - nl2sql_net
+    restart: "no"
+      
+  rag-ingest:
+    image: python:3.11-slim
+    working_dir: /app
+    volumes:
+      - ./rag_ingest:/app                # put ingest_schema.py under ./rag
+    environment:
+      EMBED_MODEL: "nomic-embed-text"
+      APP_PG_DSN: "dbname=appdb user=app password=app_pw host=nl2sql_postgres port=5432"
+      RAG_PG_DSN: "dbname=ragdb user=rag password=ragpw host=rag-pg port=5432"
+      OLLAMA_URL: "http://nl2sql_ollama:11434"
+    command: >
+      sh -lc "pip install --no-cache-dir requests psycopg2-binary &&
+              python ingest_schema.py"
+    depends_on:
+      - postgres                  # or your actual postgres service name
+      - nl2sql_ollama
+    networks:
+      - nl2sql_net
 
 volumes:
   pgdata:
   ollama_models:
+  ragpgdata:
 
 networks:
   nl2sql_net:

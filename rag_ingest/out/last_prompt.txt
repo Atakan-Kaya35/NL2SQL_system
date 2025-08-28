@@ -1,0 +1,63 @@
+Use only the facts below. If something is missing, say so.
+
+
+--- Retrieved context ---
+
+[info:info::sat-info::row::1#0]
+The advancement of the space industry in the world is seen as a common benefit in Turkey
+
+[info:info::sat-info::row::0#0]
+TURKSAT 6A is the pride of the Turkish space agency (Tübitak UZAY) as it is the first completely domestically manufactured communication satelite.
+
+[info:info::sat-info::row::3#0]
+Alper Gezeracvi was the first Turkish astranaut and he went to the ISS (International Space Station)
+
+[column:public.satcat.perigee_km#0]
+Column public.satcat.perigee_km has type numeric.
+
+[column:public.satcat.perigee_km#0]
+Column public.satcat.perigee_km has type numeric.
+
+[info:info::sat-info::row::2#0]
+TURKSAT 6A is a milestone project
+
+[table:public.satcat#0]
+Table public.satcat has columns:
+- norad_cat_id (integer)
+- object_name (text)
+- object_id (text)
+- country (text)
+- launch_site (text)
+- launch_date (date)
+- decay_date (date)
+- period_min (numeric)
+- inclination_deg (numeric)
+- apogee_km (numeric)
+- perigee_km (numeric)
+- rcs_size (text)
+- object_type (text)
+- source (text)
+- last_seen_utc (timestamp with time zone)
+
+[table:public.satcat#0]
+Table public.satcat has columns:
+- norad_cat_id (integer)
+- object_name (text)
+- object_id (text)
+- country (text)
+- launch_site (text)
+- launch_date (date)
+- decay_date (date)
+- period_min (numeric)
+- inclination_deg (numeric)
+- apogee_km (numeric)
+- perigee_km (numeric)
+- rcs_size (text)
+- object_type (text)
+- source (text)
+- last_seen_utc (timestamp with time zone)
+
+
+--- Instructions ---
+
+Answer succinctly; cite sources like [kind:name#ix] when you use them.
