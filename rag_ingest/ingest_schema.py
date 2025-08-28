@@ -12,6 +12,7 @@ APP_PG_DSN = os.getenv("APP_PG_DSN")   # source DB with real tables
 RAG_PG_DSN = os.getenv("RAG_PG_DSN")   # target DB that has rag.rag_item / rag.rag_chunk
 OLLAMA_URL = os.getenv("OLLAMA_URL", "http://nl2sql_ollama:11434")
 EMBED_MODEL = os.getenv("EMBED_MODEL", "nomad-embed-text")  # pick one and match dimension in DB
+SCHEMA_KINDS = ('table','column','key')
 
 # ----------------- Schema ingestion -------------------
 
@@ -117,6 +118,18 @@ def upsert_chunks(rag_conn, item_id, chunks, embeddings):
 def ingest():
     app_conn = connect(APP_PG_DSN)
     rag_conn = connect(RAG_PG_DSN)
+    
+    # Get rid of all the old schema items first, list ound in variable SCHEMA_KINDS
+    with rag_conn:
+        with rag_conn.cursor() as cur:
+            # 1) delete old snapshot for this source/ns
+            cur.execute(
+                """
+                DELETE FROM rag.rag_item
+                WHERE kind = ANY(%s)
+                """,
+                (list(SCHEMA_KINDS),)
+            )
 
     col_rows, key_rows = fetch_schema(app_conn)
     print(f"[DEBUG] columns rows: {len(col_rows)}, keys rows: {len(key_rows)}")
@@ -317,6 +330,6 @@ def audit_rag():
 # end of ----------------- Audit RAG DB -------------------
 
 if __name__ == "__main__":
-    #ingest()
+    ingest()
     #audit_rag()
     pass

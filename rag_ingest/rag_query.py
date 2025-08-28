@@ -1,3 +1,8 @@
+"""
+docker compose run --rm --entrypoint sh rag-ingest -lc "pip install --no-cache-dir psycopg2-binary requests >/dev/null && python -u /app/rag_query.py --query 'What does Sentinel-2 provide?' --dataset sat-info --kinds info,table,column --candidates 80 --topk 8 --per-item-cap 2 --mmr 0.6 --ivf-probes 10 --save-prompt /app/out/last_prompt.txt"
+"""
+
+
 # rag_query.py
 import os, sys, json, argparse, psycopg2, requests
 from datetime import datetime

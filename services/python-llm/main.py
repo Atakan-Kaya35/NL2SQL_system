@@ -180,13 +180,12 @@ def trim(s, n=200):
     s = s.replace("\n"," ")
     return s if len(s)<=n else s[:n-1]+"…"
 
-def search_rag_context(question: str, only_info_filed = False, for_intuition = False, same_query = False) -> Optional[str]:
+def search_rag_context(question: str, only_info_filed = False, for_intuition = False, same_query = False, topk = 12) -> Optional[str]:
     global intuirion_rags
     # arbitrary value of what is the least amount of similarity acceptable, found through testing
     min_sim = 0.60
     kinds = "table,column,key,info"
     candidates = 80
-    topk = 12
     per_item_cap = 8
     mmr = 0.5
 
