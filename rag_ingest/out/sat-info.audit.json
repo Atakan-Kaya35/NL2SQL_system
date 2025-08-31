@@ -1,16 +1,46 @@
 {
   "dataset": "sat-info",
-  "ts_utc": "2025-08-28T12:52:21Z",
+  "ts_utc": "2025-08-31T13:22:50Z",
   "embedding_model": "nomic-embed-text",
   "apply": true,
   "counts": {
-    "desired": 49,
-    "current": 6,
-    "creates": 43,
+    "desired": 64,
+    "current": 0,
+    "creates": 64,
     "updates": 0,
     "deletes": 0
   },
   "actions": [
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "info::sat-info::row::0",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "info::sat-info::row::1",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "info::sat-info::row::2",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "info::sat-info::row::3",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "info::sat-info::row::4",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "info::sat-info::row::5",
+      "chunks": 1
+    },
     {
       "action": "UPSERT_APPLIED",
       "name": "info::sat-info::row::6",
@@ -128,102 +158,177 @@
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::29",
+      "name": "example::sat-info::row::29",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::30",
+      "name": "example::sat-info::row::30",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::31",
+      "name": "example::sat-info::row::31",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::32",
+      "name": "example::sat-info::row::32",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::33",
+      "name": "example::sat-info::row::33",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::34",
+      "name": "example::sat-info::row::34",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::35",
+      "name": "example::sat-info::row::35",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::36",
+      "name": "example::sat-info::row::36",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::37",
+      "name": "example::sat-info::row::37",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::38",
+      "name": "example::sat-info::row::38",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::39",
+      "name": "example::sat-info::row::39",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::40",
+      "name": "example::sat-info::row::40",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::41",
+      "name": "example::sat-info::row::41",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::42",
+      "name": "example::sat-info::row::42",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::43",
+      "name": "example::sat-info::row::43",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::44",
+      "name": "example::sat-info::row::44",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::45",
+      "name": "example::sat-info::row::45",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::46",
+      "name": "example::sat-info::row::46",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::47",
+      "name": "example::sat-info::row::47",
       "chunks": 1
     },
     {
       "action": "UPSERT_APPLIED",
-      "name": "info::sat-info::row::48",
+      "name": "example::sat-info::row::48",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::49",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::50",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::51",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::52",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::53",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::54",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::55",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::56",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::57",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::58",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::59",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::60",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::61",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::62",
+      "chunks": 1
+    },
+    {
+      "action": "UPSERT_APPLIED",
+      "name": "example::sat-info::row::63",
       "chunks": 1
     }
   ]

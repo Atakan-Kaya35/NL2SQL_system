@@ -1,6 +1,8 @@
 """
 This script attains the schema information fro the source database localed at APP_PG_DNG
 and retreives the schema of the table to commit them tı the RAG_PG_DNG database for RAG use.
+
+docker compose run --rm --entrypoint sh rag-ingest -lc " pip install --no-cache-dir psycopg2-binary requests >/dev/null && python -u /app/ingest_schema.py"
 """
 
 # ingest_schema.py

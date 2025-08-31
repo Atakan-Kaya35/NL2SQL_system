@@ -9,7 +9,6 @@ services:
       ST_PASS: ${ST_PASS}
       PG_DSN: postgresql://app:app_pw@postgres:5432/appdb
       RUN_MODE: oneshot          # ← force one-shot
-      # CRON: "10 20 * * * /app/run_once.sh"   # ← remove or comment out
     depends_on:
       postgres:
         condition: service_healthy
@@ -171,6 +170,7 @@ services:
     networks:
       - nl2sql_net
     restart: "no"
+    profiles: ["manual"]
       
   rag-ingest:
     image: python:3.11-slim

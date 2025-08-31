@@ -181,20 +181,24 @@ def trim(s, n=200):
     return s if len(s)<=n else s[:n-1]+"…"
 
 def search_rag_context(question: str, only_info_filed = False, for_intuition = False, same_query = False, topk = 12) -> Optional[str]:
-    global intuirion_rags
+    global intuition_rags
     # arbitrary value of what is the least amount of similarity acceptable, found through testing
-    min_sim = 0.60
-    kinds = "table,column,key,info"
+    min_intuition_sim = 0.60
+    min_sql_sim = 0.45
+    sql_kinds = "table,column,key,info,example"
+    intuition_kinds = ["info"]
     candidates = 80
     per_item_cap = 8
     mmr = 0.5
 
     if not same_query:
+        intuition_rags = []
+        
         print(">>> embedding query …")
         qvec = embed_query(question)
         qvec_txt = to_pgvector(qvec)
 
-        kinds = [k.strip() for k in kinds.split(",") if k.strip()]
+        kinds = [k.strip() for k in sql_kinds.split(",") if k.strip()]
         kinds_sql = "(" + ",".join(["%s"]*len(kinds)) + ")"
 
         conn = psycopg2.connect(RAG_PG_DSN)
@@ -237,7 +241,7 @@ def search_rag_context(question: str, only_info_filed = False, for_intuition = F
             dist = float(r["dist"])
             sim  = 1.0 - dist  # cosine distance -> similarity
             print("sim:", sim)
-            if sim > min_sim:
+            if sim > min_intuition_sim and r["kind"] in intuition_kinds:
                 intuition_rags.append({
                     "item_id": r["item_id"],
                     "kind":    r["kind"],
@@ -289,7 +293,7 @@ async def generate_sql(req: GenerateSQLRequest):
         print("=== RAG Context ===")
         print(current_rag_context)
     else:
-        rag_context = search_rag_context(req.question) or "(none)"
+        rag_context = search_rag_context(req.question, topk=6) or "(none)"
         print(">>> SQL Side RAG context for inference (not cached) (this indicates the the sql query generated before this call was for a different prompt):")
         print(rag_context)
         current_rag_context = rag_context
@@ -343,9 +347,9 @@ async def generate_intuition(req: GenerateInferenceRequest):
     current_prompt = req.question
         
     prompt = (
-        "You are a data assistant. Given a natural language question and the result rows (JSON), "
+        "You are a data assistant. Given a natural language question and the result rows (JSON), the result of the relvant SQL question is given to you for you to use, "
         "write a short, clear answer in one or two sentences. Do not talk about SQL in your answer you are not meant to create queries.\n\n"
-        f"Question: {req.question}\nContext: {rag_context}"
+        f"Question: {req.question}\nSQL return statement: {req.context}\nContext: {rag_context}"
     )
     adapter = build_adapter()
     text = await adapter.sql_generate(prompt)

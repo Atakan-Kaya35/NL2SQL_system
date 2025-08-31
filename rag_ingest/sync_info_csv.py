@@ -3,7 +3,7 @@ There is not a docker container for the rag-ingest service in the docker compose
 This means that he psychopg2 needs to be installed and this python script must be run in the same command
 progressively or a container with the module must be set up for the code to work
 
-docker compose run --rm --entrypoint sh rag-ingest -lc " pip install --no-cache-dir psycopg2-binary requests >/dev/null && python -u /app/sync_info_csv.py --dataset sat-info --desired /app/info_items.csv --export-current /app/out/sat-info.current.csv --audit-json /app/out/sat-info.audit.json --apply"
+docker compose run --rm --entrypoint sh rag-ingest -lc " pip install --no-cache-dir psycopg2-binary requests >/dev/null && python -u /app/sync_info_csv.py --dataset sat-info --desired info,example --export-current /app/out/sat-info.current.csv --audit-json /app/out/sat-info.audit.json --apply"
 """
 
 
@@ -19,8 +19,8 @@ EMBED_MODEL = os.getenv("EMBED_MODEL", "nomic-embed-text")   # 768-dim
 CHUNK_CHARS = int(os.getenv("CHUNK_CHARS", "1500"))          # simple, char-based chunking
 
 # --- helpers ---
-ROW_NAME_FMT = "info::{dataset}::row::{idx}"  # 0-based index
-ROW_NAME_RE  = re.compile(r"^info::(?P<ds>[^:]+)::row::(?P<ix>\d+)$")
+ROW_NAME_FMT = "{kind}::{dataset}::row::{idx}"
+ROW_NAME_RE  = re.compile(r"^(?P<kind>[^:]+)::(?P<ds>[^:]+)::row::(?P<ix>\d+)$")
 
 def normalize_text(s: str) -> str:
     # A light normalization for diffing (no accidental updates due to whitespace/CRLF)
@@ -56,20 +56,24 @@ def q(cur, sql, params=None):
     cols = [c.name for c in cur.description]
     return [dict(zip(cols, row)) for row in cur.fetchall()]
 
-def load_desired_csv(path, has_header=False, dedupe=False):
+def load_desired_csv(desired_kinds, has_header=False, dedupe=False):
+    cut_points = []
     rows = []
-    # put the first rows of the first column into a list
-    with open(path, "r", encoding="utf-8-sig", newline="") as f:
-        rdr = csv.reader(f)
-        for i, rec in enumerate(rdr):
-            if i == 0 and has_header:
-                continue
-            if not rec:
-                continue
-            body = (rec[0] or "").strip()
-            if not body:
-                continue
-            rows.append(body)
+    for kind in desired_kinds:
+        # put the first rows of the first column into a list
+        with open(f"./{kind}_items.csv", "r", encoding="utf-8-sig", newline="") as f:
+            rdr = csv.reader(f)
+            for i, rec in enumerate(rdr):
+                if i == 0 and has_header:
+                    continue
+                if not rec:
+                    continue
+                body = (rec[0] or "").strip()
+                if not body:
+                    continue
+                rows.append(body)
+        
+        cut_points.append(len(rows))
     
     # deduplicate if requested
     if dedupe:
@@ -81,7 +85,8 @@ def load_desired_csv(path, has_header=False, dedupe=False):
             seen.add(key)
             out.append(b)
         rows = out
-    return rows
+        
+    return rows, cut_points
 
 def export_current_to_csv(rows_by_ix, out_path):
     # writes a single-column CSV in index order (0..max)
@@ -107,12 +112,12 @@ def parse_row_index(name, dataset):
     return int(m.group("ix"))
 
 # --- DB operations (per-item transactions) ---
-def upsert_item_and_chunks(conn, *, dataset, row_ix, body, apply_changes: bool, meta_extra=None):
+def upsert_item_and_chunks(conn, *, dataset, row_ix, body, kind, apply_changes: bool, meta_extra=None):
     """
     Create/update info::<dataset>::row::<row_ix> with body; replace chunks+embeddings.
     If apply_changes=False, just returns the planned operations (no DB writes).
     """
-    name = ROW_NAME_FMT.format(dataset=dataset, idx=row_ix)
+    name = ROW_NAME_FMT.format(kind=kind, dataset=dataset, idx=row_ix)
     metadata = {"dataset": dataset, "identity": "position", "row": row_ix}
     if meta_extra: 
         metadata.update(meta_extra)
@@ -128,7 +133,7 @@ def upsert_item_and_chunks(conn, *, dataset, row_ix, body, apply_changes: bool, 
 
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id FROM rag.rag_item WHERE kind='info' AND name=%s", (name,))
+        cur.execute("SELECT id FROM rag.rag_item WHERE kind=%s AND name=%s", (kind, name,))
         got = cur.fetchone()
         # if the item with the desired name with kind "info" already exists, it is updated
         # else a new item is created
@@ -142,9 +147,9 @@ def upsert_item_and_chunks(conn, *, dataset, row_ix, body, apply_changes: bool, 
         else:
             cur.execute("""
               INSERT INTO rag.rag_item(kind, name, body, metadata)
-              VALUES ('info', %s, %s, %s)
+              VALUES (%s, %s, %s, %s)
               RETURNING id
-            """, (name, body, json.dumps(metadata)))
+            """, (kind, name, body, json.dumps(metadata)))
             item_id = cur.fetchone()[0]
 
         # replace chunks as the embeddings are not updateable
@@ -160,15 +165,15 @@ def upsert_item_and_chunks(conn, *, dataset, row_ix, body, apply_changes: bool, 
         conn.rollback()
         raise
 
-def delete_item(conn, *, dataset, row_ix, apply_changes: bool):
-    name = ROW_NAME_FMT.format(dataset=dataset, idx=row_ix)
+def delete_item(conn, *, dataset, row_ix, kind, apply_changes: bool):
+    name = ROW_NAME_FMT.format(kind=kind, dataset=dataset, idx=row_ix)
     if not apply_changes:
         return {"action": "DELETE", "name": name}
     cur = conn.cursor()
     try:
         # no need to worry about deleting from rag.rag_chunks as well as in the db 
         # an auto delete parallelization between rag_items and rag_chunks is set
-        cur.execute("DELETE FROM rag.rag_item WHERE kind='info' AND name=%s", (name,))
+        cur.execute("DELETE FROM rag.rag_item WHERE kind=%s AND name=%s", (kind, name,))
         affected = cur.rowcount
         conn.commit()
         return {"action": "DELETE_APPLIED", "name": name, "rows": affected}
@@ -179,7 +184,7 @@ def delete_item(conn, *, dataset, row_ix, apply_changes: bool):
 def main():
     ap = argparse.ArgumentParser(description="Sync CSV to RAG info items (position-based identity)")
     ap.add_argument("--dataset", default="ragdb", help="dataset id, used in name: info::<dataset>::row::<ix>")
-    ap.add_argument("--desired", default="./info_items.csv", help="CSV path with desired bodies (first column only)")
+    ap.add_argument("--desired", default="info,example", help="CSV path with desired bodies (first column only)")
     ap.add_argument("--has-header", action="store_true", help="treat first row as header")
     ap.add_argument("--dedupe", action="store_true", help="drop duplicate rows in desired (exact text match)")
     ap.add_argument("--apply", action="store_true", help="apply DB changes; otherwise dry-run")
@@ -188,9 +193,13 @@ def main():
     args = ap.parse_args()
     
     print("Got request with params", args)
+    
+    desired_kinds = args.desired.split(",")
+    desired_kinds_tuple = tuple(desired_kinds)
 
     # load desired (which is basically the entire source)
-    desired_rows = load_desired_csv(args.desired, has_header=args.has_header, dedupe=args.dedupe)
+    desired_rows, cut_points = load_desired_csv(desired_kinds, has_header=args.has_header, dedupe=args.dedupe)
+    print(cut_points, "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", desired_kinds)
     # 0-based index
     # a dictionary of index -> normalized body text
     desired_map = {ix: normalize_text(body) for ix, body in enumerate(desired_rows)}
@@ -199,12 +208,13 @@ def main():
     cur  = conn.cursor()
 
     # Read current info items for this dataset
-    current_items = q(cur, """
-      SELECT id, name, body, metadata, version, created_at, updated_at
+    current_items = q(cur, f"""
+    SELECT id, kind, name, body, metadata, version, created_at, updated_at
       FROM rag.rag_item
-      WHERE kind='info' AND name LIKE %s
-      ORDER BY name
-    """, (f"info::{args.dataset}::row::%",))
+     WHERE kind IN ({', '.join([f"%s" for _ in desired_kinds_tuple])})
+       AND name LIKE %s
+     ORDER BY name
+    """, (*desired_kinds_tuple, f"%::{args.dataset}::row::%"))
 
     current_map = {}
     for it in current_items:
@@ -245,22 +255,40 @@ def main():
     if not args.apply:
         print("(dry-run: use --apply to execute)\n")
 
+    counter = 0
+    cur_kind = desired_kinds[0]
+    kind_index = 0
     # Apply in stable order
     try:
         for ix in creates:
+            counter += 1
             body = desired_map[ix]
-            res = upsert_item_and_chunks(conn, dataset=args.dataset, row_ix=ix, body=body, apply_changes=args.apply)
+            res = upsert_item_and_chunks(conn, dataset=args.dataset, kind=cur_kind, row_ix=ix, body=body, apply_changes=args.apply)
             ops["actions"].append(res)
             print(f"CREATE row {ix}: {res['action']}")
+            if counter in cut_points:
+                kind_index += 1
+                if kind_index < len(desired_kinds):
+                    cur_kind = desired_kinds[kind_index]                
         for ix in updates:
+            counter += 1
             body = desired_map[ix]
-            res = upsert_item_and_chunks(conn, dataset=args.dataset, row_ix=ix, body=body, apply_changes=args.apply)
+            res = upsert_item_and_chunks(conn, dataset=args.dataset, kind=cur_kind, row_ix=ix, body=body, apply_changes=args.apply)
             ops["actions"].append(res)
             print(f"UPDATE row {ix}: {res['action']}")
+            if counter in cut_points:
+                kind_index += 1
+                if kind_index < len(desired_kinds):
+                    cur_kind = desired_kinds[kind_index]   
         for ix in deletes:
-            res = delete_item(conn, dataset=args.dataset, row_ix=ix, apply_changes=args.apply)
+            counter += 1
+            res = delete_item(conn, dataset=args.dataset, kind=cur_kind, row_ix=ix, apply_changes=args.apply)
             ops["actions"].append(res)
             print(f"DELETE row {ix}: {res['action']}")
+            if counter in cut_points:
+                kind_index += 1
+                if kind_index < len(desired_kinds):
+                    cur_kind = desired_kinds[kind_index]   
     finally:
         conn.close()
 
