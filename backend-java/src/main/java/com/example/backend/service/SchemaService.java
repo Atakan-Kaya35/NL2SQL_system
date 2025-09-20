@@ -19,7 +19,7 @@ public class SchemaService {
         -- Tables and columns (sample snapshot)
         """;
         List<String> rows = jdbc.query(
-            "SELECT table_name, column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' ORDER BY table_name, ordinal_position",
+            "redacted",
             (rs, i) -> rs.getString("table_name") + "(" + rs.getString("column_name") + " " + rs.getString("data_type") + ")"
         );
         return ddl + String.join("\n", rows);

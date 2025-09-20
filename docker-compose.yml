@@ -1,9 +1,9 @@
 version: "3.9"
 services:
-  satcat_ingest:
+  redacted_ingest:
     build:
-      context: ./satcat_ingest
-    container_name: nl2sql_satcat_ingest
+      context: ./redacted_ingest
+    container_name: nl2sql_redacted_ingest
     environment:
       ST_USER: ${ST_USER}
       ST_PASS: ${ST_PASS}
@@ -33,8 +33,6 @@ services:
       timeout: 3s
       retries: 30
     networks: [nl2sql_net]
-
-
 
   nl2sql_ollama:
     image: ollama/ollama:latest
@@ -72,7 +70,7 @@ services:
       nl2sql_ollama:
         condition: service_started
     environment:
-      OLLAMA_MODEL: "llama3.1:8b-instruct-q4_K_M"
+      OLLAMA_MODEL: "${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M}"
       EMBED_MODEL: "nomic-embed-text"
     networks: [nl2sql_net]
     restart: "no"
@@ -152,8 +150,8 @@ services:
       - ragpgdata:/var/lib/postgresql/data
     networks: [nl2sql_net]
 
-  tle_ingest:
-    build: ./tle_ingest
+  redacted_ingest:
+    build: ./redacted_ingest
     environment:
       ST_USERNAME: ${ST_USER}
       ST_PASSWORD: ${ST_PASS}

@@ -17,8 +17,7 @@
         }
 
         textarea,
-        input,
-        select {
+        input {
             width: 100%;
             padding: .5rem;
         }
@@ -52,60 +51,271 @@
             padding: .4rem;
             text-align: left;
         }
+
+        .badge {
+            background: #f3f4f6;
+            border: 1px solid #e5e7eb;
+            padding: .25rem .5rem;
+            border-radius: .5rem;
+        }
+
+        .toast {
+            position: fixed;
+            right: 1rem;
+            bottom: 1rem;
+            background: #111;
+            color: #fff;
+            padding: .6rem .9rem;
+            border-radius: .5rem;
+            opacity: 0;
+            transition: .2s;
+        }
+
+        .toast.show {
+            opacity: 1;
+            transform: translateY(-6px);
+        }
+
+        .dark body {
+            background: #0b0b0b;
+            color: #e6e6e6;
+        }
+
+        .dark pre {
+            background: #0f172a;
+            color: #e2e8f0;
+        }
+
+        .dark .badge {
+            background: #111827;
+            border-color: #374151;
+            color: #e5e7eb;
+        }
     </style>
 </head>
 
 <body>
     <h1>NL2SQL Test Portal</h1>
+
+    <!-- Toolbar -->
+    <div id="toolbar" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap">
+        <span id="latency" class="badge">⏱️ —</span>
+        <span id="rowcount" class="badge">📊 — rows</span>
+        <button onclick="copySQL()">Copy SQL</button>
+        <button id="dlCsvBtn" onclick="downloadCSV()" disabled>Download CSV</button>
+        <button id="dlJsonBtn" onclick="downloadJSON()" disabled>Download JSON</button>
+        <button id="explainBtn" onclick="explainSQL()" disabled>Explain SQL</button>
+        <label style="margin-left:auto;display:flex;gap:.4rem;align-items:center">
+            <input type="checkbox" id="darkToggle" onchange="toggleDark()"> Dark
+        </label>
+    </div>
+    <div id="toast" class="toast"></div>
+
     <label>Question</label>
     <input id="question" placeholder="List last 5 missions by launch date" />
-    <label>Backend</label>
-    <select id="backend">
-        <option value="mock" selected>mock</option>
-        <option value="ollama">ollama (local)</option>
-        <option value="openai">openai (api)</option>
-    </select>
     <button onclick="run()">Run</button>
 
     <div id="out"></div>
 
+    <details style="margin:1rem 0">
+        <summary>Try examples</summary>
+        <div style="display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem">
+            <button onclick="setQ('redacted')">Most followed redacted</button>
+        </div>
+    </details>
+
     <script>
-        async function run() {
-            const question = document.getElementById('question').value || 'List last 5 missions by launch date';
-            const backend = document.getElementById('backend').value;
-            const out = document.getElementById('out');
-            out.innerHTML = 'Running...';
-            const r = await fetch('/api/run', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ question, backend })
-            });
-            const data = await r.json();
-            const rowsTable = rowsToTable(data.rows || []);
-            out.innerHTML = `
-    <h2>SQL</h2>
-    <pre>${data.sql || ''}</pre>
-    <div class="row">
-      <div>
-        <h2>Rows (${(data.rows || []).length})</h2>
-        ${rowsTable}
-      </div>
-      <div>
-        <h2>Answer</h2>
-        <pre>${data.answer || ''}</pre>
-        <h3>Warnings</h3>
-        <pre>${(data.warnings || []).join('\\n')}</pre>
-      </div>
-    </div>
-  `;
+        // ---------- state & helpers ----------
+        let lastRun = null, lastSQL = '';
+        let tickHandle = null, t0 = 0;
+
+        function setQ(q) { document.getElementById('question').value = q; }
+        function toast(msg) {
+            const t = document.getElementById('toast');
+            t.textContent = msg; t.classList.add('show');
+            setTimeout(() => t.classList.remove('show'), 1500);
+        }
+        function copySQL() { navigator.clipboard.writeText(lastSQL || '').then(() => toast('SQL copied')); }
+        function toggleDark() { document.documentElement.classList.toggle('dark', document.getElementById('darkToggle').checked); }
+
+        function startTimer() {
+            stopTimer();
+            t0 = performance.now();
+            const latencyEl = document.getElementById('latency');
+            const tick = () => {
+                const ms = performance.now() - t0;
+                const s = (ms / 1000).toFixed(1);
+                latencyEl.textContent = `⏱️ ${s} s`;
+                const hint = document.getElementById('intuitionStatus');
+                if (hint) hint.textContent = `Thinking…`;
+            };
+            tick(); // immediate
+            tickHandle = setInterval(tick, 100);
+        }
+        function stopTimer(finalMs) {
+            if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+            if (typeof finalMs === 'number') {
+                document.getElementById('latency').textContent = `⏱️ ${Math.max(1, Math.round(finalMs))} ms`;
+            }
         }
 
-        function rowsToTable(rows) {
+        // ---------- CSV/JSON ----------
+        const csvEscape = v => {
+            const s = (v ?? '').toString();
+            return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+        };
+        function rowsToCSV(rows) {
+            if (!rows || !rows.length) return 'No rows\n';
+            // rows may be list-of-lists from backend; map to objects with col indexes as keys
+            const keys = Object.keys(rows[0]).map(String);
+            const head = keys.map(csvEscape).join(',') + '\n';
+            const body = rows.map(r => keys.map(k => csvEscape(r[k])).join(',')).join('\n') + '\n';
+            return head + body;
+        }
+        function buildCSV(data) {
+            const lines = [];
+            lines.push('Section,Key,Value');
+            lines.push(`Meta,Question,${csvEscape(data.question)}`);
+            lines.push(`Meta,SQL,${csvEscape(data.sql || '')}`);
+            lines.push(`Meta,Answer,${csvEscape(data.answer || '')}`);
+            (data.warnings || []).forEach((w, i) => lines.push(`Meta,Warning ${i + 1},${csvEscape(w)}`));
+            lines.push('');
+            lines.push('Rows Table');
+            lines.push((data.rows || []).length ? rowsToCSV(data.rows).trimEnd() : 'No rows');
+            return lines.join('\n') + '\n';
+        }
+        function downloadCSV() {
+            if (!lastRun) return;
+            const csv = buildCSV(lastRun);
+            const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            const ts = new Date().toISOString().replace(/[:.]/g, '-');
+            a.href = url; a.download = `nl2sql_result_${ts}.csv`;
+            document.body.appendChild(a); a.click(); a.remove();
+            URL.revokeObjectURL(url);
+        }
+        function downloadJSON() {
+            if (!lastRun) return;
+            const blob = new Blob([JSON.stringify(lastRun, null, 2)], { type: 'application/json' });
+            const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(blob), download: 'nl2sql_result.json' });
+            document.body.appendChild(a); a.click(); a.remove();
+        }
+
+        function rowsToTable(rows, headers) {
             if (!rows.length) return '<em>No rows</em>';
-            const keys = Object.keys(rows[0]);
-            const head = '<tr>' + keys.map(k => `<th>${k}</th>`).join('') + '</tr>';
-            const body = rows.map(r => '<tr>' + keys.map(k => `<td>${r[k]}</td>`).join('') + '</tr>').join('');
-            return `<table>${head}${body}</table>`;
+            // Support both list-of-objects and list-of-lists + headers
+            let headHtml, bodyHtml;
+            if (headers && headers.length) {
+                headHtml = '<tr>' + headers.map(h => `<th>${h}</th>`).join('') + '</tr>';
+                bodyHtml = rows.map(r => '<tr>' + r.map(v => `<td>${v}</td>`).join('') + '</tr>').join('');
+            } else {
+                const keys = Object.keys(rows[0]);
+                headHtml = '<tr>' + keys.map(k => `<th>${k}</th>`).join('') + '</tr>';
+                bodyHtml = rows.map(r => '<tr>' + keys.map(k => `<td>${r[k]}</td>`).join('') + '</tr>').join('');
+            }
+            return `<table>${headHtml}${bodyHtml}</table>`;
+        }
+
+        // ---------- SINGLE run() ----------
+        async function run() {
+            const question = document.getElementById('question').value || 'List last 5 missions by launch date';
+            const out = document.getElementById('out');
+
+            // Reset toolbar + buttons
+            document.getElementById('rowcount').textContent = '📊 …';
+            document.getElementById('dlCsvBtn').disabled = true;
+            document.getElementById('dlJsonBtn').disabled = true;
+            document.getElementById('explainBtn').disabled = true;
+
+            // Placeholders + start ticking
+            out.innerHTML = `
+        <h2>SQL</h2>
+        <pre>(waiting for model)</pre>
+        <div class="row">
+          <div>
+            <h2>Rows</h2>
+            <em>Waiting for results…</em>
+          </div>
+          <div>
+            <h2>Answer</h2>
+            <pre class="answer"><span id="intuitionStatus">Thinking…</span></pre>
+            <h3>Warnings</h3>
+            <pre></pre>
+          </div>
+        </div>`;
+            startTimer();
+
+            // Fetch
+            let data = {};
+            let startedAt = performance.now();
+            try {
+                const resp = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ question })
+                });
+                data = await resp.json();
+            } catch (e) {
+                stopTimer();
+                out.innerHTML = `<pre>Request failed: ${e?.message || e}</pre>`;
+                console.error(e);
+                return;
+            }
+            const elapsed = performance.now() - startedAt;
+            stopTimer(elapsed);
+
+            // Normalize fields
+            const rows = Array.isArray(data.rows) ? data.rows : [];
+            const headers = Array.isArray(data.headers) ? data.headers : []; // backend returns headers separately
+            const sql = (data.sql || '').toString();
+            const answer = (data.answer || '').toString();
+            const warnings = Array.isArray(data.warnings) ? data.warnings : [];
+
+            lastSQL = sql;
+            lastRun = { question, sql, answer, warnings, rows };
+
+            // Enable buttons by facts, not hope 🙂
+            document.getElementById('dlCsvBtn').disabled = rows.length === 0;
+            document.getElementById('dlJsonBtn').disabled = false;
+            document.getElementById('explainBtn').disabled = !(sql && sql.trim().length);
+
+            // Render
+            const rowsTable = rowsToTable(rows, headers);
+            const warnHtml = warnings.join('\n');
+            out.innerHTML = `
+        <h2>SQL</h2>
+        <pre>${sql}</pre>
+        <div class="row">
+          <div>
+            <h2>Rows</h2>
+                ${rowsTable}
+
+          </div>
+          <div>
+            <h2>Answer</h2>
+            <pre class="answer">${answer}</pre>
+            <h3>Warnings</h3>
+            <pre>${warnHtml}</pre>
+          </div>
+        </div>`;
+
+            // Stats in toolbar
+            document.getElementById('rowcount').textContent = `📊 ${rows.length} rows`;
+        }
+
+        // ---------- Explain ----------
+        async function explainSQL() {
+            if (!lastSQL) return;
+            const r = await fetch('/api/run', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ question: `Explain this SQL in plain language:\n\n${lastSQL}` })
+            });
+            ans.innerHTML += `\n---\nExplanation incoming:\n`;
+            const d = await r.json();
+            toast('Explanation ready');
+            const ans = document.querySelector('#out .answer');
+            if (ans) ans.innerHTML += `\n\n---\nExplain:\n${(d.answer || '')}`;
         }
     </script>
 </body>

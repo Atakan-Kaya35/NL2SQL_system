@@ -30,7 +30,6 @@ class GenerateSQLRequest(BaseModel):
     question: str = Field(..., description="Natural language question")
     schema_ddl: Optional[str] = Field(None, description="Optional DDL snippet")
     context: Optional[str] = Field(None, description="Optional extra context (RAG)")
-    backend: Optional[str] = Field(None, description="Backend override: mock|ollama|openai")
     
 class GenerateInferenceRequest(BaseModel):
     question: str
@@ -120,7 +119,7 @@ def embed_query(text):
         raise RuntimeError(f"Bad embedding payload: {data}")
     return vec
 
-def mmr_select(cands, k, lam=0.5, per_item_cap=None):
+def mmr_select(cands, k, lam=0.5, per_item_cap=None, kinds_to_cap = {"example":2}):
     """
     cands: list of dicts with keys: id, item_id, chunk_ix, sim (higher better)
     returns selected list of indices into cands
@@ -154,7 +153,12 @@ def mmr_select(cands, k, lam=0.5, per_item_cap=None):
                 best_score, best_i = score, i
         if best_i is None:
             break
-        selected.append(best_i)
+        if cands[best_i]["kind"] not in kinds_to_cap:
+            selected.append(best_i)
+        else:
+            if kinds_to_cap[cands[best_i]["kind"]] > 0:
+                selected.append(best_i)
+                kinds_to_cap[cands[best_i]["kind"]] -= 1
         used_per_item[cands[best_i]["item_id"]] = used_per_item.get(cands[best_i]["item_id"], 0) + 1
     return selected
 
@@ -185,8 +189,10 @@ def search_rag_context(question: str, only_info_filed = False, for_intuition = F
     # arbitrary value of what is the least amount of similarity acceptable, found through testing
     min_intuition_sim = 0.60
     min_sql_sim = 0.45
-    sql_kinds = "table,column,key,info,example"
-    intuition_kinds = ["info"]
+    sql_kinds = "redacted"
+    # the sql kinds can include the "example" kind as well but since the model used is not very sophisticated it gets heavily influnced by the contents of the example 
+    # question and querries, as far as thinkig that the specifications of the examples are a part of the user's querry
+    intuition_kinds = ["redacted"]
     candidates = 80
     per_item_cap = 8
     mmr = 0.5
@@ -214,21 +220,14 @@ def search_rag_context(question: str, only_info_filed = False, for_intuition = F
         where = ["i.kind = ANY(%s)"]
         params = [kinds]
         if only_info_filed:
-            where.append("(i.kind <> 'info' OR (i.kind='info' AND (i.metadata->>'dataset') = %s))")
+            where.append("redacted")
             # ? what now
             params.append("filed")
 
         where_sql = " AND ".join(where)
         # cosine distance: smaller is better; similarity = 1 - dist
         sql = f"""
-        SELECT i.id AS item_id, i.kind, i.name, c.chunk_ix, c.chunk_text,
-                (c.embedding <=> %s::vector) AS dist,
-                i.updated_at
-        FROM rag.rag_chunk c
-        JOIN rag.rag_item  i ON i.id = c.item_id
-        WHERE {where_sql}
-        ORDER BY c.embedding <=> %s::vector
-        LIMIT %s
+        redacted
         """
         params_sql = [qvec_txt] + params + [qvec_txt, candidates]
         cur.execute(sql, params_sql)
@@ -241,6 +240,7 @@ def search_rag_context(question: str, only_info_filed = False, for_intuition = F
             dist = float(r["dist"])
             sim  = 1.0 - dist  # cosine distance -> similarity
             print("sim:", sim)
+            print(r["kind"], intuition_kinds)
             if sim > min_intuition_sim and r["kind"] in intuition_kinds:
                 intuition_rags.append({
                     "item_id": r["item_id"],
@@ -306,12 +306,12 @@ async def generate_sql(req: GenerateSQLRequest):
 - Only output a single SQL statement; no explanations.
 - Use existing columns; do not invent.
 - Prefer LIMIT 100 unless the question requests exact counts.
-Question: {req.question}
+User Provided question you are meant to answer: {req.question} 
 
-Schema (may be partial):
+Schema of tables:
 {req.schema_ddl or '(schema omitted)'}
 
-Context from RAG (optional):
+Context from RAG, the Examples below teach structure only. Do not copy any literal values from them unless explicitly provided by the user; prefer user-provided values and schema grounding:
 {rag_context or '(none)'}
 """
     adapter = build_adapter()

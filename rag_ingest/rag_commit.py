@@ -1,3 +1,8 @@
+"""
+    The csv file has to have the format where each row contaşns one entry, the structure of the row must be:
+    kind, name, body, metadata_name1, metadata_content1, metadata_name2 ... etc
+"""
+
 import os, json, requests, psycopg2, argparse, csv
 from psycopg2.extras import execute_values
 from datetime import datetime
