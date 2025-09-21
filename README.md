@@ -1,5 +1,9 @@
 # NL2SQL System
 
+<p align="center">
+  <img src="./NL2SQL_struct.drawio.png" alt="BSP Logo" width="100"/>
+</p>
+
 ## Overview
 
 This project implements a **Natural Language to SQL (NL2SQL)** pipeline, enabling users to query relational databases using plain language instead of SQL. The system emphasizes flexibility, transparency, and production-readiness while remaining database-agnostic.
