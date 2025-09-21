@@ -1,7 +1,7 @@
 # NL2SQL System
 
 <p align="center">
-  <img src="./demos/NL2SQL_basic_en.drawio.png" alt="BSP Logo" width="100"/>
+  <img src="./demos/NL2SQL_basic_en.drawio.png" alt="BSP Logo"/>
 </p>
 
 ## Overview
@@ -13,7 +13,7 @@ This project implements a **Natural Language to SQL (NL2SQL)** pipeline, enablin
 ## Docker Compose Structure
 
 <p align="center">
-  <img src="./demos/NL2SQL_struct.drawio.png" alt="BSP Logo" width="100"/>
+  <img src="./demos/NL2SQL_struct.drawio.png" alt="BSP Logo"/>
 </p>
 
 ## Key Technical Achievements
