@@ -1,7 +1,7 @@
 # NL2SQL System
 
 <p align="center">
-  <img src="./NL2SQL_struct.drawio.png" alt="BSP Logo" width="100"/>
+  <img src="./demos/NL2SQL_basic_en.drawio.png" alt="BSP Logo" width="100"/>
 </p>
 
 ## Overview
@@ -9,6 +9,12 @@
 This project implements a **Natural Language to SQL (NL2SQL)** pipeline, enabling users to query relational databases using plain language instead of SQL. The system emphasizes flexibility, transparency, and production-readiness while remaining database-agnostic.
 
 !!! There has been a heavy reduction in the code for the confidentiality of a state entity and its inner operations. The places that are redacted are labeled with "redacted".
+
+## Docker Compose Structure
+
+<p align="center">
+  <img src="./demos/NL2SQL_struct.drawio.png" alt="BSP Logo" width="100"/>
+</p>
 
 ## Key Technical Achievements
 
